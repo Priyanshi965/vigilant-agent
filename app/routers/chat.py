@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from app.models.schemas import ChatRequest, ChatResponse
 from app.core.llm_client import complete
 from app.core.guard import score_prompt, is_suspicious
@@ -11,33 +11,40 @@ router = APIRouter()
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest) -> ChatResponse:
     """
-    Main chat endpoint. Receives a message and returns the LLM response.
-    Phase 1: Scores every message but does not block yet (log-only mode).
-    Phase 2: Blocking will be enabled here.
+    Main chat endpoint.
+    Phase 2: Blocks suspicious messages before they reach the LLM.
     """
-    # Score the incoming message
+    # Step 1 — Score the message
     injection_score = score_prompt(request.message)
     flagged = is_suspicious(request.message)
 
-    # Log the score — this is our data collection
+    # Step 2 — BLOCK if score exceeds threshold
     if flagged:
         logger.warning(
-            f"SUSPICIOUS message from user={request.user_id} "
+            f"BLOCKED request from user={request.user_id} "
             f"score={injection_score:.2f} "
             f"preview={request.message[:50]!r}"
         )
-    else:
-        logger.info(
-            f"Clean message from user={request.user_id} "
-            f"score={injection_score:.2f}"
+        # Return 403 — do NOT reveal the score to the caller
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "Request blocked by security policy",
+                "code": "INJECTION_DETECTED"
+            }
         )
 
-    # Phase 1: Pass ALL messages through (no blocking yet)
+    # Step 3 — Safe message, pass to LLM
+    logger.info(
+        f"Clean message from user={request.user_id} "
+        f"score={injection_score:.2f}"
+    )
+
     reply = await complete(request.message)
 
     return ChatResponse(
         reply=reply,
-        flagged=flagged,
+        flagged=False,
         injection_score=injection_score,
         blocked=False
     )
