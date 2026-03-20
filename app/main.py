@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from app.routers import chat
+from app.routers import agent
 from app.middleware.logging_mw import LoggingMiddleware
 
 app = FastAPI(
@@ -18,3 +19,4 @@ async def ping():
 
 # Register routers
 app.include_router(chat.router)
+app.include_router(agent.router)
