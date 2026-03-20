@@ -14,7 +14,7 @@ router = APIRouter()
 async def chat(request: ChatRequest) -> ChatResponse:
     """
     Full security pipeline:
-    Normalize → Redact Input → Score → Block/Allow → LLM → Redact Output
+    Normalize → Redact Input → Score → Block/Allow → LLM → Redact Output → Output Filter
     """
     # Step 1 — Normalize (strip invisible chars, fix unicode)
     clean_message = normalize(request.message)
@@ -50,6 +50,27 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
     # Step 6 — Redact PII from LLM output before sending to user
     safe_reply = redact(reply)
+
+    # Step 7 — Output filter: catch leaked system prompts or secrets
+    LEAKAGE_PATTERNS = [
+        "you are an ai",
+        "you are a helpful",
+        "my instructions are",
+        "my system prompt",
+        "i was told to",
+        "i am instructed to",
+        "as an ai language model",
+    ]
+
+    reply_lower = safe_reply.lower()
+    for pattern in LEAKAGE_PATTERNS:
+        if pattern in reply_lower:
+            logger.critical(
+                f"OUTPUT FILTER triggered for user={request.user_id} "
+                f"pattern={pattern!r}"
+            )
+            safe_reply = "I'm sorry, I can't help with that."
+            break
 
     return ChatResponse(
         reply=safe_reply,
