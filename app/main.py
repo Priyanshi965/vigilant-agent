@@ -1,11 +1,15 @@
 from fastapi import FastAPI
 from app.routers import chat
+from app.middleware.logging_mw import LoggingMiddleware
 
 app = FastAPI(
     title="Vigilant Agent",
     description="LLM Security Proxy Gateway",
     version="0.1.0"
 )
+
+# Register middleware
+app.add_middleware(LoggingMiddleware)
 
 # Health check
 @app.get("/ping")
