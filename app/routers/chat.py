@@ -5,9 +5,23 @@ from app.core.llm_client import complete
 from app.core.guard import score_prompt, is_suspicious
 from app.core.normalizer import normalize
 from app.core.redactor import redact
+from prometheus_client import Counter
+
+BLOCKED_REQUESTS = Counter("blocked_chat_requests_total", "Blocked chat requests")
+PII_REDACTED = Counter("pii_redacted_chat_total", "PII items redacted in chat")
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def count_pii_replacements(original: str, redacted: str) -> int:
+    """Count how many PII items were redacted by comparing the two strings."""
+    tags = [
+        "[PHONE_REDACTED]", "[EMAIL_REDACTED]", "[API_KEY_REDACTED]",
+        "[AADHAAR_REDACTED]", "[PAN_REDACTED]", "[PASSWORD_REDACTED]",
+        "[IP_REDACTED]", "[NAME_REDACTED]", "[ORG_REDACTED]", "[LOCATION_REDACTED]"
+    ]
+    return sum(redacted.count(tag) for tag in tags)
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -20,7 +34,15 @@ async def chat(request: ChatRequest) -> ChatResponse:
     clean_message = normalize(request.message)
 
     # Step 2 — Redact PII from input before it reaches the LLM
-    clean_message = redact(clean_message)
+    redacted_message = redact(clean_message)
+
+    # Count and track PII redactions on input
+    input_pii_count = count_pii_replacements(clean_message, redacted_message)
+    if input_pii_count > 0:
+        PII_REDACTED.inc(input_pii_count)
+        logger.info(f"Redacted {input_pii_count} PII item(s) from input of user={request.user_id}")
+
+    clean_message = redacted_message
 
     # Step 3 — Score the cleaned message
     injection_score = score_prompt(clean_message)
@@ -28,6 +50,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
     # Step 4 — Block if flagged
     if flagged:
+        BLOCKED_REQUESTS.inc()  # ← increment blocked counter
         logger.warning(
             f"BLOCKED request from user={request.user_id} "
             f"score={injection_score:.2f} "
@@ -50,6 +73,12 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
     # Step 6 — Redact PII from LLM output before sending to user
     safe_reply = redact(reply)
+
+    # Count and track PII redactions on output
+    output_pii_count = count_pii_replacements(reply, safe_reply)
+    if output_pii_count > 0:
+        PII_REDACTED.inc(output_pii_count)
+        logger.info(f"Redacted {output_pii_count} PII item(s) from output for user={request.user_id}")
 
     # Step 7 — Output filter: catch leaked system prompts or secrets
     LEAKAGE_PATTERNS = [

@@ -1,6 +1,7 @@
 import re
 from app.config import get_settings
-
+from prometheus_client import Counter
+BLOCKED_COUNTER = Counter("blocked_requests_total", "Blocked requests")
 settings = get_settings()
 
 # Injection attack patterns — ordered by severity
