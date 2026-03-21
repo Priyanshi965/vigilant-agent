@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 from app.routers import chat, agent
 from app.middleware.logging_mw import LoggingMiddleware
-
+from app.routers import chat, agent, auth
 app = FastAPI(
     title="Vigilant Agent",
     description="LLM Security Proxy Gateway",
@@ -51,5 +51,6 @@ async def classifier_mode():
 
 # API routers
 
-app.include_router(chat.router)
-app.include_router(agent.router)
+app.include_router(auth.router)
+app.include_router(chat.router, tags=["chat"])
+app.include_router(agent.router, tags=["agent"])

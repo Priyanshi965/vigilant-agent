@@ -1,17 +1,18 @@
 import logging
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from app.models.schemas import ChatRequest, ChatResponse
 from app.core.llm_client import complete
 from app.core.guard import score_prompt, is_suspicious
 from app.core.normalizer import normalize
 from app.core.redactor import redact
+from app.core.auth import get_current_user
 from prometheus_client import Counter
 
 BLOCKED_REQUESTS = Counter("blocked_chat_requests_total", "Blocked chat requests")
 PII_REDACTED = Counter("pii_redacted_chat_total", "PII items redacted in chat")
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(tags=["chat"])
 
 
 def count_pii_replacements(original: str, redacted: str) -> int:
@@ -25,11 +26,18 @@ def count_pii_replacements(original: str, redacted: str) -> int:
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest) -> ChatResponse:
+async def chat(
+    request: ChatRequest,
+    current_user: dict = Depends(get_current_user)
+) -> ChatResponse:
     """
     Full security pipeline:
     Normalize → Redact Input → Score → Block/Allow → LLM → Redact Output → Output Filter
+    Requires: valid JWT token in Authorization header.
     """
+    # Use authenticated username instead of trusting request body
+    user_id = current_user["username"]
+
     # Step 1 — Normalize (strip invisible chars, fix unicode)
     clean_message = normalize(request.message)
 
@@ -40,7 +48,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
     input_pii_count = count_pii_replacements(clean_message, redacted_message)
     if input_pii_count > 0:
         PII_REDACTED.inc(input_pii_count)
-        logger.info(f"Redacted {input_pii_count} PII item(s) from input of user={request.user_id}")
+        logger.info(f"Redacted {input_pii_count} PII item(s) from input of user={user_id}")
 
     clean_message = redacted_message
 
@@ -50,9 +58,9 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
     # Step 4 — Block if flagged
     if flagged:
-        BLOCKED_REQUESTS.inc()  # ← increment blocked counter
+        BLOCKED_REQUESTS.inc()
         logger.warning(
-            f"BLOCKED request from user={request.user_id} "
+            f"BLOCKED request from user={user_id} "
             f"score={injection_score:.2f} "
             f"preview={clean_message[:50]!r}"
         )
@@ -65,10 +73,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
         )
 
     # Step 5 — Safe, send to LLM
-    logger.info(
-        f"Clean message from user={request.user_id} "
-        f"score={injection_score:.2f}"
-    )
+    logger.info(f"Clean message from user={user_id} score={injection_score:.2f}")
     reply = await complete(clean_message)
 
     # Step 6 — Redact PII from LLM output before sending to user
@@ -78,7 +83,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
     output_pii_count = count_pii_replacements(reply, safe_reply)
     if output_pii_count > 0:
         PII_REDACTED.inc(output_pii_count)
-        logger.info(f"Redacted {output_pii_count} PII item(s) from output for user={request.user_id}")
+        logger.info(f"Redacted {output_pii_count} PII item(s) from output for user={user_id}")
 
     # Step 7 — Output filter: catch leaked system prompts or secrets
     LEAKAGE_PATTERNS = [
@@ -95,7 +100,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
     for pattern in LEAKAGE_PATTERNS:
         if pattern in reply_lower:
             logger.critical(
-                f"OUTPUT FILTER triggered for user={request.user_id} "
+                f"OUTPUT FILTER triggered for user={user_id} "
                 f"pattern={pattern!r}"
             )
             safe_reply = "I'm sorry, I can't help with that."
