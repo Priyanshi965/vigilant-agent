@@ -13,14 +13,20 @@ class Settings(BaseSettings):
     # LLM
     openai_api_key: str = "not-used"
     groq_api_key: str = ""
-    model_name: str = "llama3-8b-8192"
+    model_name: str = "llama-3.1-8b-instant"
 
     # Security
     injection_threshold: float = 0.8
 
     # Logging
     log_level: str = "INFO"
+
+    # HuggingFace
     hf_token: str = "***REMOVED***"
+
+    # Authentication
+    secret_key: str = "changeme"
+    token_expire_hours: int = 24
 
 
 @lru_cache()
