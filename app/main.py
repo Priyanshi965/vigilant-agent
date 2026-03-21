@@ -3,9 +3,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from prometheus_fastapi_instrumentator import Instrumentator
-from app.routers import chat, agent
-from app.middleware.logging_mw import LoggingMiddleware
 from app.routers import chat, agent, auth
+from app.middleware.logging_mw import LoggingMiddleware
+from app.database import create_tables
+
+# Create database tables on startup
+create_tables()
+
 app = FastAPI(
     title="Vigilant Agent",
     description="LLM Security Proxy Gateway",
@@ -27,7 +31,7 @@ Instrumentator().instrument(app).expose(app)
 # Logging middleware
 app.add_middleware(LoggingMiddleware)
 
-# Serve the chat UI at /
+# Serve chat UI at /
 @app.get("/")
 async def serve_ui():
     return FileResponse("app/static/index.html")
@@ -45,12 +49,14 @@ async def stats():
         "blocked_requests_total": int(BLOCKED_REQUESTS._value.get()),
         "pii_redacted_total": int(PII_REDACTED._value.get()),
     }
+
+# Classifier mode
+@app.get("/classifier-mode")
 async def classifier_mode():
     from app.core.guard import get_classifier_mode
     return {"mode": get_classifier_mode()}
 
-# API routers
-
+# Routers
 app.include_router(auth.router)
 app.include_router(chat.router, tags=["chat"])
 app.include_router(agent.router, tags=["agent"])
