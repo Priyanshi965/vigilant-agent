@@ -20,6 +20,7 @@ class Settings(BaseSettings):
 
     # Logging
     log_level: str = "INFO"
+    hf_token: str = "***REMOVED***"
 
 
 @lru_cache()

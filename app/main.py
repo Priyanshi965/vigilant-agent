@@ -45,7 +45,11 @@ async def stats():
         "blocked_requests_total": int(BLOCKED_REQUESTS._value.get()),
         "pii_redacted_total": int(PII_REDACTED._value.get()),
     }
+async def classifier_mode():
+    from app.core.guard import get_classifier_mode
+    return {"mode": get_classifier_mode()}
 
 # API routers
+
 app.include_router(chat.router)
 app.include_router(agent.router)
