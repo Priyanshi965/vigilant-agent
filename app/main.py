@@ -3,20 +3,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from prometheus_fastapi_instrumentator import Instrumentator
-from app.routers import chat, agent, auth
+from app.routers import chat, agent, auth, conversations
 from app.middleware.logging_mw import LoggingMiddleware
-from app.database import create_tables
+from app.database import engine, Base
+from app.models import db_models
 
-# Create database tables on startup
-create_tables()
+# Create all database tables on startup
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Vigilant Agent",
     description="LLM Security Proxy Gateway",
-    version="0.1.0"
+    version="0.2.0"
 )
 
-# CORS
+# CORS — allow browser requests
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -32,14 +33,14 @@ Instrumentator().instrument(app).expose(app)
 app.add_middleware(LoggingMiddleware)
 
 # Serve chat UI at /
-@app.get("/")
+@app.get("/", include_in_schema=False)
 async def serve_ui():
     return FileResponse("app/static/index.html")
 
 # Health check
 @app.get("/ping")
 async def ping():
-    return {"status": "ok", "message": "Vigilant Agent is running"}
+    return {"status": "ok", "message": "Vigilant Agent is running", "version": "0.2.0"}
 
 # Stats
 @app.get("/stats")
@@ -60,3 +61,4 @@ async def classifier_mode():
 app.include_router(auth.router)
 app.include_router(chat.router, tags=["chat"])
 app.include_router(agent.router, tags=["agent"])
+app.include_router(conversations.router)
