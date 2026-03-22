@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from app.database import get_db
 from app.core.auth import (
     authenticate_user, register_user,
     create_access_token, get_current_user
@@ -28,39 +30,26 @@ class UserResponse(BaseModel):
 
 
 @router.post("/register", status_code=201)
-async def register(request: RegisterRequest):
-    """
-    Register a new user.
-    Role options: readonly, operator, admin
-    """
+async def register(request: RegisterRequest, db: Session = Depends(get_db)):
     if len(request.password) < 6:
-        raise HTTPException(
-            status_code=400,
-            detail="Password must be at least 6 characters"
-        )
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
 
     success = register_user(
         username=request.username,
         password=request.password,
-        role=request.role
+        role=request.role,
+        db=db
     )
 
     if not success:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Username '{request.username}' already exists"
-        )
+        raise HTTPException(status_code=409, detail=f"Username '{request.username}' already exists")
 
     return {"message": f"User '{request.username}' registered successfully", "role": request.role}
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    """
-    Login with username + password.
-    Returns a JWT access token valid for 24 hours.
-    """
-    user = authenticate_user(form_data.username, form_data.password)
+async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = authenticate_user(form_data.username, form_data.password, db=db)
 
     if not user:
         raise HTTPException(
@@ -69,10 +58,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    token = create_access_token({
-        "sub": user["username"],
-        "role": user["role"]
-    })
+    token = create_access_token({"sub": user["username"], "role": user["role"]})
 
     return TokenResponse(
         access_token=token,
@@ -83,8 +69,4 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
 @router.get("/me", response_model=UserResponse)
 async def get_me(current_user: dict = Depends(get_current_user)):
-    """Returns the currently authenticated user's info."""
-    return UserResponse(
-        username=current_user["username"],
-        role=current_user["role"]
-    )
+    return UserResponse(username=current_user["username"], role=current_user["role"])
