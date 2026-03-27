@@ -2,9 +2,20 @@ from groq import AsyncGroq
 from app.config import get_settings
 from typing import AsyncGenerator, List, Optional
 import re
+import logging
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
-_client = AsyncGroq(api_key=settings.groq_api_key)
+_client: AsyncGroq | None = None
+
+def _get_client() -> AsyncGroq:
+    """Lazy-init the Groq client so a missing key doesn't crash startup."""
+    global _client
+    if _client is None:
+        if not settings.groq_api_key:
+            raise RuntimeError("GROQ_API_KEY is not set. Add it as an environment variable on your host.")
+        _client = AsyncGroq(api_key=settings.groq_api_key)
+    return _client
 
 SYSTEM_PROMPT = """You are Vigilant, a helpful AI assistant.
 
@@ -58,7 +69,7 @@ async def complete(
 
     messages.append({"role": "user", "content": prompt})
 
-    response = await _client.chat.completions.create(
+    response = await _get_client().chat.completions.create(
         model=settings.model_name,
         messages=messages,
         max_tokens=1000,
@@ -88,7 +99,7 @@ async def stream_complete(
 
     messages.append({"role": "user", "content": prompt})
 
-    stream = await _client.chat.completions.create(
+    stream = await _get_client().chat.completions.create(
         model=settings.model_name,
         messages=messages,
         max_tokens=1000,
