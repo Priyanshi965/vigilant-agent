@@ -32,6 +32,9 @@ services:
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=vigilant123
       - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
     networks:
       - vigilant-net
     restart: unless-stopped

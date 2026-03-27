@@ -4,6 +4,7 @@ load_dotenv()
 from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import sqlite3
 import uuid
@@ -348,6 +349,111 @@ async def chat(req: ChatRequest, token: str = None):
         "blocked": blocked,
         "flagged": is_attack and injection_score > 0.5
     }
+
+@app.post("/chat/stream")
+async def chat_stream(req: ChatRequest, token: str = None):
+    """SSE streaming endpoint — yields tokens as they arrive from Groq."""
+    if not token:
+        raise HTTPException(status_code=401, detail="MISSING_TOKEN")
+    session = get_user_by_token(token)
+    if not session:
+        raise HTTPException(status_code=401, detail="INVALID_TOKEN")
+    if not groq_client:
+        raise HTTPException(status_code=503, detail="LLM_NOT_AVAILABLE")
+
+    conv_id = req.conversation_id or str(uuid.uuid4())
+    injection_score, pii_items_redacted, is_attack = analyze_message(req.message)
+    blocked = injection_score > 0.9
+
+    # Persist user message
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('SELECT id FROM conversations WHERE id = ?', (conv_id,))
+    if not cursor.fetchone():
+        cursor.execute('INSERT INTO conversations (id, user_id, title) VALUES (?, ?, ?)',
+                       (conv_id, session["user_id"], req.message[:40]))
+    msg_id = str(uuid.uuid4())
+    cursor.execute(
+        'INSERT INTO messages (id, conversation_id, sender, content, injection_score, pii_redacted) VALUES (?, ?, ?, ?, ?, ?)',
+        (msg_id, conv_id, 'user', req.message, injection_score, pii_items_redacted))
+    conn.commit()
+    conn.close()
+
+    system_prompt = (
+        "You are Vigilant Agent — an intelligent AI assistant embedded in a cybersecurity terminal.\n"
+        "You are knowledgeable, helpful, and conversational across all topics.\n"
+        "Respond naturally and helpfully. Use markdown when appropriate.\n"
+        "Never refuse reasonable questions."
+    )
+
+    def generate():
+        # First frame: security metadata
+        meta = json.dumps({
+            "injection_score": round(injection_score, 4),
+            "pii_items_redacted": pii_items_redacted,
+            "blocked": blocked,
+            "flagged": is_attack and injection_score > 0.5,
+            "conversation_id": conv_id,
+        })
+        yield f"data: [META:{meta}]\n\n"
+
+        if blocked:
+            msg = (
+                "I can't process that request — it contained patterns commonly used "
+                "to override AI system instructions.\\n\\nIf you meant something else "
+                "entirely, feel free to rephrase and I'll be glad to help."
+            )
+            yield f"data: {json.dumps({'t': msg})}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+
+        messages = [{"role": "system", "content": system_prompt}]
+        for h in (req.history or [])[-12:]:
+            role = h.get("role")
+            content = h.get("content", "")
+            if role in ["user", "assistant"] and content:
+                messages.append({"role": role, "content": content})
+        messages.append({"role": "user", "content": req.message})
+
+        full_reply = []
+        try:
+            stream = groq_client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=messages,
+                max_tokens=1024,
+                temperature=0.7,
+                stream=True,
+            )
+            for chunk in stream:
+                delta = chunk.choices[0].delta.content
+                if delta:
+                    full_reply.append(delta)
+                    yield f"data: {json.dumps({'t': delta})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'t': f'⚠️ Error: {e}'})}\n\n"
+
+        # Persist agent reply
+        reply_text = "".join(full_reply)
+        if is_attack and injection_score > 0.5:
+            reply_text += "\n\n⚠️ _Note: This request contained patterns commonly used for prompt injection._"
+        try:
+            c2 = sqlite3.connect(DB_PATH)
+            c2.execute(
+                'INSERT INTO messages (id, conversation_id, sender, content) VALUES (?, ?, ?, ?)',
+                (str(uuid.uuid4()), conv_id, 'agent', reply_text))
+            c2.commit()
+            c2.close()
+        except Exception:
+            pass
+
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
 
 @app.get("/chat/history/{conversation_id}")
 async def get_chat_history(conversation_id: str, token: str = None):
