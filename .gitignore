@@ -12,3 +12,14 @@ __pycache__/
 
 # Logs
 *.log
+
+# Databases (runtime data, not committed)
+*.db
+*.sqlite
+*.sqlite3
+
+# Claude Code internal files
+.claude/
+
+# Node
+node_modules/

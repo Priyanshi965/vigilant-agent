@@ -40,38 +40,31 @@ def _regex_score(text: str) -> float:
     return highest
 
 
-# ── ML MODEL (loads once, used when available) ─────────
+# ── ML MODEL ───────────────────────────────────────────
 @lru_cache(maxsize=1)
 def _load_ml_model():
     """
-    Try to load Prompt Guard 86M from HuggingFace.
+    Load protectai/deberta-v3-base-prompt-injection-v2 from HuggingFace.
+    No gating required — downloads instantly.
     Returns (tokenizer, model) or (None, None) if unavailable.
     Cached — only loads once on first call.
     """
     try:
         from transformers import AutoTokenizer, AutoModelForSequenceClassification
-        import torch
 
-        model_id = "meta-llama/Prompt-Guard-86M"
-        token = settings.hf_token or None
+        model_id = "protectai/deberta-v3-base-prompt-injection-v2"
 
-        logger.info("Loading Prompt Guard 86M ML classifier...")
+        logger.info(f"Loading ML classifier: {model_id}")
 
-        tokenizer = AutoTokenizer.from_pretrained(
-            model_id,
-            token=token
-        )
-        model = AutoModelForSequenceClassification.from_pretrained(
-            model_id,
-            token=token
-        )
+        tokenizer = AutoTokenizer.from_pretrained(model_id)
+        model = AutoModelForSequenceClassification.from_pretrained(model_id)
         model.eval()
 
-        logger.info("✅ Prompt Guard 86M loaded successfully — ML mode active")
+        logger.info("✅ ML classifier loaded — ML mode active")
         return tokenizer, model
 
     except Exception as e:
-        logger.warning(f"⚠ Prompt Guard ML model unavailable: {e}")
+        logger.warning(f"⚠ ML model unavailable: {e}")
         logger.warning("⚠ Falling back to regex classifier")
         return None, None
 
@@ -100,11 +93,9 @@ def _ml_score(text: str) -> float | None:
             outputs = model(**inputs)
             probs = torch.softmax(outputs.logits, dim=-1)
 
-        # Label 2 = JAILBREAK (injection), Label 1 = INDIRECT injection
-        # Take the max of both injection classes
-        jailbreak_prob = probs[0][2].item()
-        indirect_prob = probs[0][1].item()
-        score = max(jailbreak_prob, indirect_prob)
+        # protectai model: label 0 = SAFE, label 1 = INJECTION
+        injection_prob = probs[0][1].item()
+        score = injection_prob
 
         return round(score, 4)
 
@@ -152,4 +143,4 @@ def is_suspicious(text: str) -> bool:
 def get_classifier_mode() -> str:
     """Returns which classifier is currently active."""
     tokenizer, model = _load_ml_model()
-    return "ML (Prompt Guard 86M)" if model is not None else "Regex Fallback"
+    return "ML (protectai/deberta-v3-base-prompt-injection-v2)" if model is not None else "Regex Fallback"

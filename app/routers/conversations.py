@@ -59,6 +59,34 @@ async def get_messages(
     ]
 
 
+@router.get("/chat/history/{conv_id}")
+async def get_chat_history(
+    conv_id: str,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Alias for /conversations/{conv_id}/messages — used by the frontend."""
+    conv = db.query(Conversation).filter(
+        Conversation.id == conv_id,
+        Conversation.user_id == current_user["user_id"]
+    ).first()
+
+    if not conv:
+        return []
+
+    return [
+        {
+            "role": m.role,
+            "sender": m.role,
+            "content": m.content,
+            "injection_score": m.injection_score,
+            "pii_redacted": m.pii_items_redacted,
+            "created_at": m.created_at.isoformat()
+        }
+        for m in conv.messages
+    ]
+
+
 @router.get("/security/events")
 async def get_security_events(
     current_user: dict = Depends(get_current_user),
