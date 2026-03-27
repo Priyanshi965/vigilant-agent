@@ -1,50 +1,152 @@
-# 🛡️ Vigilant Agent
+# Vigilant Agent
 
-An intelligent, secure, and production-ready AI agent framework. **Vigilant Agent** is designed to provide a robust proxy interface for interacting with Large Language Models (LLMs) like OpenAI and Groq, featuring built-in monitoring, containerization, and comprehensive testing.
+An intelligent, production-ready AI security gateway. Vigilant Agent is a FastAPI-based proxy for LLMs (Groq) with built-in prompt injection detection, PII redaction, JWT authentication, image understanding, and a full cybersecurity-themed chat UI.
 
-## 🚀 Key Features
-* **Multi-Model Support**: Seamlessly switch between OpenAI and Groq providers.
-* **Secure Architecture**: Environment-based configuration to keep API keys safe.
-* **Observability**: Integrated Prometheus configuration for real-time monitoring.
-* **Containerized**: Ready for deployment via Docker and Docker Compose.
-* **Reliability**: Full test suite using `pytest` to ensure agent stability.
+---
 
-## 🛠️ Tech Stack
-* **Core**: Python 3.13+
-* **LLMs**: OpenAI API, Groq Cloud
-* **DevOps**: Docker, Docker Compose, Prometheus
-* **Testing**: Pytest
-* **Database**: SQLite (`vigilant.db`)
+## Features
 
-## 📦 Installation & Setup
+- **Prompt Injection Detection** — regex + ML classifier blocks >0.9-score attacks, flags 0.5–0.9 with a warning, passes everything else cleanly
+- **PII Redaction** — detects emails, phone numbers, credit cards, SSNs before they reach the LLM
+- **JWT Authentication** — register/login with hashed passwords, Bearer token auth on all endpoints
+- **Multimodal Chat** — attach images; automatically routes to `llama-3.2-11b-vision-preview`, text-only uses `llama-3.3-70b-versatile`
+- **Conversation History** — SQLite-backed, per-user conversation and message persistence
+- **Security Audit Trail** — every request logged with injection score and PII count
+- **Rate Limiting & Alert Middleware** — pluggable middleware for request rate limits and security alerts
+- **Docker Compose** — app + Prometheus + Grafana in one command
+- **Full Chat UI** — ChatGPT-style interface with avatars, collapsible security analysis per message, image preview, session sidebar
 
-1.  **Clone the Repository**
-    ```powershell
-    git clone [https://github.com/Priyanshi965/vigilant-agent.git](https://github.com/Priyanshi965/vigilant-agent.git)
-    cd vigilant-agent
-    ```
+---
 
-2.  **Set Up Virtual Environment**
-    ```powershell
-    python -m venv venv
-    .\venv\Scripts\Activate.ps1
-    pip install -r requirements.txt
-    ```
+## Tech Stack
 
-3.  **Configure Environment Variables**
-    Create a `.env` file in the root directory (do not commit this file!):
-    ```env
-    OPENAI_API_KEY=your_openai_key_here
-    GROQ_API_KEY=your_groq_key_here
-    MODEL_NAME=llama-3.1-8b-instant
-    INJECTION_THRESHOLD=0.8
-    HF_TOKEN=your_huggingface_token_here
-    SECRET_KEY=your_secret_key
-    TOKEN_EXPIRE_HOURS=24
-    ```
+| Layer | Technology |
+|---|---|
+| Backend | Python 3.11+, FastAPI, SQLAlchemy, SQLite |
+| LLM | Groq Cloud (`llama-3.3-70b-versatile`, `llama-3.2-11b-vision-preview`) |
+| Auth | JWT (`python-jose`), bcrypt (`passlib`) |
+| Security | `protectai/deberta-v3-base-prompt-injection-v2` (ML), regex fallback |
+| Frontend | Tailwind CSS, marked.js, highlight.js, JetBrains Mono |
+| DevOps | Docker, Docker Compose, Prometheus |
+| Testing | Pytest |
 
-## 🐳 Running with Docker
+---
 
-To launch the agent along with Prometheus monitoring:
-```powershell
+## Quick Start
+
+### 1. Clone and install
+
+```bash
+git clone https://github.com/Priyanshi965/vigilant-agent.git
+cd vigilant-agent
+python -m venv venv
+# Windows:
+.\venv\Scripts\Activate.ps1
+# macOS/Linux:
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 2. Configure environment
+
+Copy `.env.example` to `.env` and fill in your keys:
+
+```env
+GROQ_API_KEY=your_groq_key_here
+SECRET_KEY=any-long-random-string
+TOKEN_EXPIRE_HOURS=24
+```
+
+Get a free Groq API key at [console.groq.com](https://console.groq.com).
+
+### 3. Run
+
+```bash
+python -m uvicorn main:app --reload --port 8000
+```
+
+Open [http://localhost:8000](http://localhost:8000) — the chat UI loads automatically.
+
+Default login: `admin` / `admin123`
+
+---
+
+## Run with Docker
+
+```bash
 docker-compose up --build
+```
+
+- App: [http://localhost:8000](http://localhost:8000)
+- Prometheus: [http://localhost:9090](http://localhost:9090)
+- Grafana: [http://localhost:3000](http://localhost:3000)
+
+---
+
+## Project Structure
+
+```
+vigilant-agent/
+├── main.py                  # Standalone server (Groq + SQLite, no dependencies)
+├── static/
+│   └── index.html           # Full chat UI
+├── app/
+│   ├── main.py              # FastAPI app factory (JWT server)
+│   ├── config.py
+│   ├── database.py
+│   ├── core/
+│   │   ├── auth.py          # JWT helpers
+│   │   ├── guard.py         # Prompt injection detection
+│   │   ├── redactor.py      # PII detection & redaction
+│   │   ├── llm_client.py    # Groq client (text + vision)
+│   │   ├── alerts.py        # Security alert system
+│   │   └── memory.py        # Conversation memory
+│   ├── middleware/
+│   │   ├── alerts.py        # Request-level alert middleware
+│   │   └── rate_limit.py    # Rate limiting middleware
+│   ├── models/
+│   │   ├── db_models.py     # SQLAlchemy ORM models
+│   │   └── schemas.py       # Pydantic request/response schemas
+│   └── routers/
+│       ├── auth.py          # /auth/register, /auth/login, /auth/me
+│       ├── chat.py          # /chat
+│       └── conversations.py # /conversations, /chat/history/{id}
+├── tests/
+│   └── test_chat_endpoint.py
+├── docker-compose.yml
+├── Dockerfile
+├── requirements.txt
+└── .env.example
+```
+
+---
+
+## API Endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/ping` | — | Health check |
+| POST | `/auth/register` | — | Create account |
+| POST | `/auth/login` | — | Get token |
+| POST | `/chat?token=` | token | Send message (text or image) |
+| GET | `/conversations?token=` | token | List conversations |
+| GET | `/chat/history/{id}?token=` | token | Message history |
+
+---
+
+## Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `GROQ_API_KEY` | Yes | Groq Cloud API key |
+| `SECRET_KEY` | Yes | JWT signing secret |
+| `TOKEN_EXPIRE_HOURS` | No | Token lifetime (default 24) |
+| `DATABASE_URL` | No | SQLAlchemy URL (default SQLite) |
+
+---
+
+## Running Tests
+
+```bash
+pytest tests/ -v
+```
