@@ -50,10 +50,7 @@ def _run_security_pipeline(message: str, username: str, user_id: str, db: Sessio
     injection_score = score_prompt(clean_message)
     flagged = is_suspicious(clean_message)
 
-    # ✅ CRITICAL FIX: ONLY block truly dangerous attacks (>0.9), not legitimate queries
-    # If injection_score > 0.9 → definitely an attack attempt
-    # Otherwise → allow but flag if suspicious
-    if injection_score > 0.9:
+    if injection_score > 0.75:
         BLOCKED_REQUESTS.inc()
         logger.warning(
             f"BLOCKED request from user={username} "

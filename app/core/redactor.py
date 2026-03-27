@@ -16,6 +16,8 @@ REGEX_PATTERNS = [
     (r'gsk_[A-Za-z0-9]{20,}', '[API_KEY_REDACTED]'),
     (r'AIza[A-Za-z0-9\-_]{30,}', '[API_KEY_REDACTED]'),
     (r'ghp_[A-Za-z0-9]{30,}', '[API_KEY_REDACTED]'),
+    (r'\b\d{4}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b', '[CARD_REDACTED]'),   # credit/debit card
+    (r'\b\d{3}[\-\s]\d{2}[\-\s]\d{4}\b', '[SSN_REDACTED]'),                   # SSN xxx-xx-xxxx
     (r'\b[6-9]\d{9}\b', '[PHONE_REDACTED]'),
     (r'\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b', '[EMAIL_REDACTED]'),
     (r'\b\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b', '[AADHAAR_REDACTED]'),
