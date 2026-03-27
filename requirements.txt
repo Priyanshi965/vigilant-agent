@@ -38,6 +38,9 @@ python-multipart==0.0.9
 sqlalchemy==2.0.36
 alembic==1.13.1
 
+# === RATE LIMITING ===
+slowapi==0.1.9
+
 # === LANGCHAIN MEMORY ===
 langchain==0.2.16
 langchain-groq==0.1.9
