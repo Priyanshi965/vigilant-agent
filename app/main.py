@@ -14,7 +14,7 @@ from pathlib import Path
 Base.metadata.create_all(bind=engine)
 
 BASE_DIR = Path(__file__).resolve().parent
-static_dir = BASE_DIR / "static"
+static_dir = BASE_DIR.parent / "static"   # project root /static, not /app/static
 
 app = FastAPI(title="Vigilant Agent API")
 app.state.limiter = limiter
@@ -38,12 +38,12 @@ app.include_router(chat.router)
 app.include_router(agent.router)
 app.include_router(conversations.router)
 
-if static_dir.exists():
-    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
-
 @app.get("/")
 async def root():
-    return {"status": "online", "message": "Vigilant Agent Security Proxy V2"}
+    return FileResponse(static_dir / "index.html")
+
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 @app.get("/auth.html", include_in_schema=False)
 async def serve_auth():
     return FileResponse(static_dir / "auth.html")
