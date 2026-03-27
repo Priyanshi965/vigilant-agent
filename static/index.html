@@ -570,6 +570,13 @@
         }
         #send-btn:hover { opacity: 0.9; }
         #send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .stream-cursor {
+            display: inline-block; width: 7px; height: 15px;
+            background: var(--cyan); border-radius: 1px;
+            vertical-align: text-bottom; margin-left: 2px;
+            animation: blink-cur 0.75s step-end infinite;
+        }
+        @keyframes blink-cur { 50% { opacity: 0; } }
         #attach-btn {
             padding: 11px 12px;
             background: rgba(0,229,255,0.06);
@@ -1586,6 +1593,59 @@ function buildBlockedReply() {
 If you meant something else entirely, feel free to rephrase your question and I'll be glad to help.`;
 }
 
+// ── Streaming helpers ──────────────────────────────────────
+function appendStreamingMessage() {
+    const box = document.getElementById('chat-messages');
+    const ws  = document.getElementById('welcome-screen');
+    if (ws) ws.remove();
+    const div = document.createElement('div');
+    div.className = 'msg-outer';
+    div.innerHTML = `
+        <div class="msg-row-agent">
+            <div class="avatar avatar-ai">◈</div>
+            <div class="bubble-agent">
+                <div class="agent-label">◈ VIGILANT AGENT</div>
+                <div class="bubble-content">
+                    <div class="md-content stream-body"></div>
+                </div>
+                <div class="msg-meta">
+                    <span class="msg-time">${now()}</span>
+                </div>
+            </div>
+        </div>`;
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+    return div;
+}
+
+function updateStreamContent(div, rawText) {
+    const body = div.querySelector('.stream-body');
+    if (!body) return;
+    body.innerHTML = renderMarkdown(rawText) + '<span class="stream-cursor"></span>';
+    document.getElementById('chat-messages').scrollTop = 99999;
+}
+
+function finalizeStreamMessage(div, rawText, secData, isBlocked, isFlagged) {
+    const label     = div.querySelector('.agent-label');
+    const bubble    = div.querySelector('.bubble-content');
+    const body      = div.querySelector('.stream-body');
+    const metaDiv   = div.querySelector('.msg-meta');
+    if (isBlocked) {
+        label.textContent  = '⚠ REQUEST BLOCKED';
+        label.className    = 'agent-label blocked';
+        bubble.className   = 'bubble-content blocked';
+    } else if (isFlagged) {
+        label.textContent  = '~ VIGILANT AGENT [FLAGGED]';
+        label.className    = 'agent-label flagged';
+        bubble.className   = 'bubble-content flagged';
+    }
+    if (body) body.innerHTML = renderMarkdown(rawText); // cursor gone
+    if (secData) {
+        bubble.insertAdjacentHTML('afterend', buildSecExpander(secData));
+        metaDiv.innerHTML = `<span class="msg-time">${now()}</span>${buildRiskPill(secData.injection_score, isBlocked)}`;
+    }
+}
+
 // ── Send Message ───────────────────────────────────────────
 async function sendMessage() {
     const inp  = document.getElementById('chat-input');
@@ -1602,8 +1662,6 @@ async function sendMessage() {
     document.getElementById('risk-indicator').style.display = 'none';
     document.getElementById('input-warning').style.display  = 'none';
     document.getElementById('topbar-risk').style.opacity    = '0';
-
-    const typing = appendTypingIndicator();
     document.getElementById('send-btn').disabled = true;
 
     const payload = {
@@ -1613,29 +1671,131 @@ async function sendMessage() {
         ...(imageSnapshot && { image: imageSnapshot.base64, image_mime_type: imageSnapshot.mime })
     };
 
+    // Images can't stream (vision model doesn't support it) — use regular /chat
+    if (imageSnapshot) {
+        const typing = appendTypingIndicator();
+        try {
+            let res = await fetch(API_BASE + '/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+                body: JSON.stringify(payload)
+            });
+            if (res.status === 401 || res.status === 422) {
+                res = await fetch(API_BASE + '/chat?token=' + authToken, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+            }
+            const data = await res.json().catch(() => ({}));
+            typing.remove();
+            processResponse(res, data, text);
+        } catch {
+            typing.remove();
+            appendAgentMessage('⚠️ Connection error — is the server running?', true, false, false, null);
+        } finally {
+            document.getElementById('send-btn').disabled = false;
+            document.getElementById('chat-messages').scrollTop = 99999;
+        }
+        return;
+    }
+
+    // ── Streaming path ─────────────────────────────────────
+    const streamDiv = appendStreamingMessage();
+    let   fullText  = '';
+    let   meta      = null;
+
     try {
-        // Try Bearer (JWT server) first
-        let res = await fetch(API_BASE + '/chat', {
+        const res = await fetch(API_BASE + '/chat/stream?token=' + authToken, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
 
-        // Fallback: simple server with ?token=
-        if (res.status === 401 || res.status === 422) {
-            res = await fetch(API_BASE + '/chat?token=' + authToken, {
+        if (!res.ok || !res.body) throw new Error('stream_unavailable');
+
+        const reader  = res.body.getReader();
+        const decoder = new TextDecoder();
+        let   buf     = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+            const lines = buf.split('\n');
+            buf = lines.pop();
+
+            for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                const raw = line.slice(6).trim();
+                if (!raw) continue;
+
+                if (raw === '[DONE]') {
+                    const secData = meta ? {
+                        injection_score: meta.injection_score,
+                        pii_redacted: meta.pii_items_redacted,
+                        blocked: meta.blocked,
+                        flagged: meta.flagged
+                    } : null;
+                    finalizeStreamMessage(streamDiv, fullText, secData, meta?.blocked, meta?.flagged && !meta?.blocked);
+                    chatHistory.push({ role: 'assistant', content: fullText });
+                    if (meta) {
+                        if (meta.conversation_id) {
+                            currentConvId = meta.conversation_id;
+                            document.getElementById('session-title').textContent = smartTitle(text);
+                        }
+                        messageCount++;
+                        if (meta.blocked) blockedCount++;
+                        sessionRiskScores.push(meta.injection_score);
+                        updateScoreDisplay(meta.injection_score, meta.blocked, meta.flagged);
+                        updateSessionHealth(); updateCounters();
+                        addTimelineEvent(meta.blocked ? 'blocked' : meta.flagged ? 'warn' : 'safe',
+                            meta.blocked ? 'Attack blocked' : meta.flagged ? 'Suspicious query' : 'Safe query');
+                        addSystemLog(meta.blocked ? 'THREAT BLOCKED' : meta.flagged ? 'Query flagged' : 'OK');
+                        if (!conversations.find(c => c.id === meta.conversation_id)) loadConversations();
+                    }
+                    document.getElementById('send-btn').disabled = false;
+                    document.getElementById('chat-messages').scrollTop = 99999;
+                    return;
+                }
+
+                if (raw.startsWith('[META:')) {
+                    try { meta = JSON.parse(raw.slice(6, -1)); } catch {}
+                    continue;
+                }
+
+                // Regular text chunk
+                try {
+                    const obj = JSON.parse(raw);
+                    if (obj.t) {
+                        fullText += obj.t.replace(/\\n/g, '\n');
+                        updateStreamContent(streamDiv, fullText);
+                    }
+                } catch { /* non-JSON chunk, skip */ }
+            }
+        }
+    } catch {
+        // Streaming not available — fall back to regular /chat
+        streamDiv.remove();
+        const typing = appendTypingIndicator();
+        try {
+            let res = await fetch(API_BASE + '/chat', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
                 body: JSON.stringify(payload)
             });
+            if (res.status === 401 || res.status === 422) {
+                res = await fetch(API_BASE + '/chat?token=' + authToken, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+            }
+            const data = await res.json().catch(() => ({}));
+            typing.remove();
+            processResponse(res, data, text);
+        } catch {
+            typing.remove();
+            appendAgentMessage('⚠️ Connection error — is the server running?', true, false, false, null);
         }
-
-        const data = await res.json().catch(() => ({}));
-        typing.remove();
-        processResponse(res, data, text);
-    } catch {
-        typing.remove();
-        appendAgentMessage('⚠️ Connection error — is the server running?', true, false, false, null);
     } finally {
         document.getElementById('send-btn').disabled = false;
         document.getElementById('chat-messages').scrollTop = 99999;
