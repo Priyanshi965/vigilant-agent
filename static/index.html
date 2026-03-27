@@ -769,7 +769,7 @@
 <div id="auth-section">
     <div class="auth-card">
         <div class="auth-logo">◈ VIGILANT AGENT</div>
-        <div class="auth-sub">AI chat with active threat monitoring</div>
+        <div id="auth-subtitle" class="auth-sub">Sign in to your account</div>
 
         <form id="authForm" onsubmit="authenticate(); return false;">
             <input id="username" type="text" placeholder="username" class="auth-input" autocomplete="username">
@@ -780,8 +780,7 @@
                 <button type="button" class="tab-btn" data-mode="signup" onclick="switchAuthTab('signup')">Register</button>
             </div>
 
-            <input id="roleField" type="hidden" value="user">
-            <button type="submit" class="auth-btn">AUTHENTICATE</button>
+            <button type="submit" id="auth-submit-btn" class="auth-btn">SIGN IN</button>
         </form>
 
         <div id="authMsg" style="margin-top:12px; font-size:11px; color:var(--text-dim); text-align:center; font-family:'JetBrains Mono',monospace"></div>
@@ -1433,9 +1432,14 @@ function showWelcomeScreen() {
 function switchAuthTab(m) {
     mode = m;
     document.querySelectorAll('.tab-btn').forEach(btn => {
-        const isActive = btn.dataset.mode === m;
-        btn.classList.toggle('active', isActive);
+        btn.classList.toggle('active', btn.dataset.mode === m);
     });
+    // Update button label and subtitle so the user knows which mode is active
+    document.getElementById('auth-submit-btn').textContent = m === 'signin' ? 'SIGN IN' : 'CREATE ACCOUNT';
+    document.getElementById('auth-subtitle').textContent   = m === 'signin'
+        ? 'Sign in to your account'
+        : 'Create a new account';
+    document.getElementById('authMsg').textContent = '';
 }
 
 async function authenticate() {
@@ -1444,15 +1448,17 @@ async function authenticate() {
     const msg      = document.getElementById('authMsg');
     if (!username || !password) { msg.textContent = 'Enter username and password.'; return; }
 
-    msg.textContent = 'Authenticating…';
+    msg.style.color = 'var(--text-dim)';
+    msg.textContent = mode === 'signin' ? 'Signing in…' : 'Creating account…';
     const endpoint = mode === 'signin' ? '/auth/login' : '/auth/register';
     try {
         const res  = await fetch(API_BASE + endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password, role: document.getElementById('roleField').value })
+            body: JSON.stringify({ username, password, role: 'user' })
         });
-        const data = await res.json();
+        let data = {};
+        try { data = await res.json(); } catch {}
         if (res.ok) {
             if (mode === 'signin') {
                 loadDashboard(data.access_token, data.username || username);
@@ -1466,8 +1472,8 @@ async function authenticate() {
             msg.textContent = '✗ ' + (data.detail || 'Authentication failed');
             msg.style.color = 'var(--red)';
         }
-    } catch {
-        msg.textContent = '✗ Cannot connect to server';
+    } catch (e) {
+        msg.textContent = '✗ Cannot reach server — check your connection';
         msg.style.color = 'var(--red)';
     }
 }
