@@ -178,9 +178,9 @@ def analyze_message(message: str) -> tuple:
 
     is_attack = any(re.search(pattern, msg_lower) for pattern in attack_patterns)
 
-    # ✅ SCORE: Genuine attacks get high score, benign messages get near-zero
+    # Attacks always score >= 0.92 so they clear the 0.75 block threshold
     if is_attack:
-        injection_score = round(0.75 + min(0.24, len(message) * 0.001), 2)
+        injection_score = round(0.92 + min(0.07, len(message) * 0.001), 2)
     else:
         injection_score = round(min(0.08, len(message) * 0.00008), 4)
 
@@ -320,8 +320,7 @@ async def chat(req: ChatRequest, token: str = None):
                       VALUES (?, ?, ?, ?, ?, ?)''',
                    (msg_id, conv_id, 'user', req.message, injection_score, pii_items_redacted))
 
-    # ✅ KEY FIX: Only block if score > 0.9 (truly dangerous)
-    if injection_score > 0.9:
+    if injection_score > 0.75:
         reply = "🚫 **THREAT NEUTRALIZED** — Injection pattern detected. This request has been logged and blocked. If this is a false positive, please rephrase your query."
         blocked = True
     else:
