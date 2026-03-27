@@ -1,10 +1,14 @@
 import re
-import spacy
+import logging
+
+logger = logging.getLogger(__name__)
 
 try:
+    import spacy
     nlp = spacy.load("en_core_web_sm")
-except OSError:
-    raise RuntimeError("Run: python -m spacy download en_core_web_sm")
+except (OSError, ImportError):
+    logger.warning("spaCy model not found — NER redaction disabled, regex-only mode active")
+    nlp = None
 
 # ── REGEX PATTERNS ─────────────────────────────────────
 REGEX_PATTERNS = [
@@ -82,11 +86,14 @@ def redact(text: str) -> str:
     for pattern, replacement in REGEX_PATTERNS:
         text = re.sub(pattern, replacement, text)
 
-    # Step 2 — spaCy NER with smart context checking
-    doc = nlp(text)
-    redactions = []
+    # Step 2 — spaCy NER with smart context checking (skipped if model unavailable)
+    if nlp is None:
+        redactions = []
+    else:
+        doc = nlp(text)
+        redactions = []
 
-    for ent in doc.ents:
+    for ent in (doc.ents if nlp else []):
         ent_lower = ent.text.lower().strip()
 
         # Skip whitelisted entities
