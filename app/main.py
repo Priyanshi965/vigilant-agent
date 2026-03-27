@@ -5,44 +5,57 @@ from fastapi.responses import FileResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 from app.routers import chat, agent, auth, conversations
 from app.middleware.logging_mw import LoggingMiddleware
+from app.middleware.rate_limit import limiter, rate_limit_error_handler
 from app.database import engine, Base
 from app.models import db_models
+from slowapi.errors import RateLimitExceeded
+from pathlib import Path
 
-# Create all database tables on startup
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(
-    title="Vigilant Agent",
-    description="LLM Security Proxy Gateway",
-    version="0.2.0"
-)
+BASE_DIR = Path(__file__).resolve().parent
+static_dir = BASE_DIR / "static"
 
-# CORS — allow browser requests
+app = FastAPI(title="Vigilant Agent API")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_error_handler)
+
+# Setup CORS so the frontend can communicate with the backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Adjust this in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Prometheus metrics
 Instrumentator().instrument(app).expose(app)
 
-# Logging middleware
 app.add_middleware(LoggingMiddleware)
 
-# Serve chat UI at /
-@app.get("/", include_in_schema=False)
-async def serve_ui():
-    return FileResponse("app/static/index.html")
+app.include_router(auth.router)
+app.include_router(chat.router)
+app.include_router(agent.router)
+app.include_router(conversations.router)
 
-# Health check
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+@app.get("/")
+async def root():
+    return {"status": "online", "message": "Vigilant Agent Security Proxy V2"}
+@app.get("/auth.html", include_in_schema=False)
+async def serve_auth():
+    return FileResponse(static_dir / "auth.html")
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return FileResponse(static_dir / "logo.png")
+
 @app.get("/ping")
 async def ping():
-    return {"status": "ok", "message": "Vigilant Agent is running", "version": "0.2.0"}
+    return {"status": "ok", "message": "Vigilant Agent is running", "version": "0.3.0"}
 
-# Stats
 @app.get("/stats")
 async def stats():
     from app.routers.chat import BLOCKED_REQUESTS, PII_REDACTED
@@ -51,14 +64,7 @@ async def stats():
         "pii_redacted_total": int(PII_REDACTED._value.get()),
     }
 
-# Classifier mode
 @app.get("/classifier-mode")
 async def classifier_mode():
     from app.core.guard import get_classifier_mode
     return {"mode": get_classifier_mode()}
-
-# Routers
-app.include_router(auth.router)
-app.include_router(chat.router, tags=["chat"])
-app.include_router(agent.router, tags=["agent"])
-app.include_router(conversations.router)
