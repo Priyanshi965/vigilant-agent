@@ -1,12 +1,10 @@
-from fastapi import APIRouter, HTTPException, status, Depends
-from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 from app.database import get_db
-from app.core.auth import (
-    authenticate_user, register_user,
-    create_access_token, get_current_user
-)
+from app.models.db_models import User
+from app.core.auth import get_password_hash, verify_password, create_access_token, get_current_user
+import uuid
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -14,59 +12,53 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 class RegisterRequest(BaseModel):
     username: str
     password: str
-    role: str = "readonly"
+    role: str = "user"
 
 
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
+class LoginRequest(BaseModel):
     username: str
-    role: str
+    password: str
 
 
-class UserResponse(BaseModel):
-    username: str
-    role: str
-
-
-@router.post("/register", status_code=201)
+@router.post("/register")
 async def register(request: RegisterRequest, db: Session = Depends(get_db)):
-    if len(request.password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    existing = db.query(User).filter(User.username == request.username).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Username already registered")
 
-    success = register_user(
+    new_user = User(
+        id=str(uuid.uuid4()),
         username=request.username,
-        password=request.password,
+        hashed_password=get_password_hash(request.password),
         role=request.role,
-        db=db
+        is_active=True
     )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return {"message": "Account created successfully", "username": new_user.username}
 
-    if not success:
-        raise HTTPException(status_code=409, detail=f"Username '{request.username}' already exists")
 
-    return {"message": f"User '{request.username}' registered successfully", "role": request.role}
-
-
-@router.post("/login", response_model=TokenResponse)
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = authenticate_user(form_data.username, form_data.password, db=db)
-
-    if not user:
+@router.post("/login")
+async def login(request: LoginRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == request.username).first()
+    if not user or not verify_password(request.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
+            detail="Incorrect username or password"
         )
 
-    token = create_access_token({"sub": user["username"], "role": user["role"]})
-
-    return TokenResponse(
-        access_token=token,
-        username=user["username"],
-        role=user["role"]
+    access_token = create_access_token(
+        data={"sub": user.username, "user_id": user.id, "role": user.role}
     )
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "username": user.username,
+        "role": user.role
+    }
 
 
-@router.get("/me", response_model=UserResponse)
+@router.get("/me")
 async def get_me(current_user: dict = Depends(get_current_user)):
-    return UserResponse(username=current_user["username"], role=current_user["role"])
+    return {"username": current_user["username"], "role": current_user["role"]}

@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from typing import Optional
 
 
 class ChatRequest(BaseModel):
@@ -11,6 +12,10 @@ class ChatRequest(BaseModel):
     user_id: str = Field(
         default="anonymous",
         description="Identifier for the user sending the message"
+    )
+    conversation_id: Optional[str] = Field(
+        default=None,
+        description="Conversation ID for multi-turn memory. If None, a new conversation is created."
     )
 
 
@@ -28,10 +33,12 @@ class ChatResponse(BaseModel):
         default=False,
         description="True if the request was blocked by security policy"
     )
+    conversation_id: str = Field(
+        default=None,
+        description="The conversation ID to use for follow-up messages."
+    )
 
 
 class ErrorResponse(BaseModel):
     error: str = Field(description="Human-readable error message")
     code: str = Field(description="Machine-readable error code")
-    
-    
