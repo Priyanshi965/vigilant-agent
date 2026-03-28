@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # HuggingFace
-    hf_token: str = "***REMOVED***"
+    hf_token: str = ""
 
     # Authentication
     secret_key: str = "changeme"
