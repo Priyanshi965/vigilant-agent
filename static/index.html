@@ -756,6 +756,89 @@
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(0,229,255,0.15); border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(0,229,255,0.3); }
+
+        /* ── Sidebar collapse toggle ────────────────────────── */
+        #sidebar-toggle {
+            width: 26px; height: 26px; flex-shrink: 0;
+            background: transparent; border: 1px solid var(--border);
+            color: var(--text-dim); border-radius: 6px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; font-size: 10px; transition: all 150ms;
+        }
+        #sidebar-toggle:hover {
+            background: rgba(0,229,255,0.08);
+            border-color: rgba(0,229,255,0.2);
+            color: var(--cyan);
+        }
+        #left-sidebar {
+            transition: width 220ms ease;
+        }
+        #left-sidebar.collapsed {
+            width: 0 !important;
+            border-right: none;
+            overflow: hidden;
+        }
+        #topbar-sidebar-open {
+            display: none;
+            width: 32px; height: 32px;
+            background: rgba(0,229,255,0.06);
+            border: 1px solid var(--border);
+            color: var(--text-dim); border-radius: 7px;
+            align-items: center; justify-content: center;
+            cursor: pointer; font-size: 16px; transition: all 150ms;
+            flex-shrink: 0;
+        }
+        #topbar-sidebar-open:hover {
+            background: rgba(0,229,255,0.1);
+            border-color: rgba(0,229,255,0.25);
+            color: var(--cyan);
+        }
+        #topbar-sidebar-open.visible { display: flex; }
+
+        /* ── Mobile sidebar backdrop ────────────────────────── */
+        #sidebar-backdrop {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.65); z-index: 4;
+        }
+        #sidebar-backdrop.visible { display: block; }
+
+        /* ── Mobile responsive ──────────────────────────────── */
+        @media (max-width: 640px) {
+            #left-sidebar {
+                position: fixed !important;
+                left: 0; top: 0; bottom: 0;
+                z-index: 6; width: 248px !important;
+                transform: translateX(-100%);
+                transition: transform 220ms ease !important;
+            }
+            #left-sidebar.mobile-open {
+                transform: translateX(0);
+            }
+            #left-sidebar.collapsed {
+                width: 248px !important;
+                transform: translateX(-100%);
+            }
+            #topbar-sidebar-open { display: flex !important; }
+            #sidebar-toggle { display: none; }
+            #topbar { padding: 0 12px; gap: 8px; }
+            .topbar-center { display: none; }
+            .topbar-stat { display: none; }
+            #topbar-risk { display: none !important; }
+            #chat-messages { padding: 16px 12px; }
+            #input-area { padding: 10px 10px 12px; }
+            #send-btn { padding: 11px 12px; font-size: 11px; }
+            .bubble-user { max-width: 88%; }
+            .welcome-grid { grid-template-columns: 1fr 1fr !important; }
+            .welcome-title { font-size: 20px; }
+            .welcome-sub { font-size: 12px; margin-bottom: 24px; }
+            .msg-outer { margin-bottom: 16px; }
+            #security-panel.open {
+                position: fixed; right: 0; top: 0; bottom: 0;
+                z-index: 7; width: 100% !important; max-width: 300px;
+                border-left: 1px solid var(--border);
+            }
+            .auth-card { padding: 28px 20px; }
+        }
     </style>
 </head>
 <body>
@@ -793,10 +876,16 @@
 ═══════════════════════════════════════════════════════════ -->
 <div id="dashboard-section" class="hidden">
 
+    <!-- Mobile/collapsed sidebar backdrop -->
+    <div id="sidebar-backdrop" onclick="closeSidebarMobile()"></div>
+
     <!-- Left Sidebar -->
     <div id="left-sidebar">
         <div class="sidebar-header">
-            <div class="sidebar-logo">◈ VIGILANT</div>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px">
+                <div class="sidebar-logo" style="margin-bottom:0">◈ VIGILANT</div>
+                <button id="sidebar-toggle" onclick="toggleSidebar()" title="Collapse sidebar">◀</button>
+            </div>
             <button class="new-chat-btn" onclick="startNewConversation()">+ NEW CHAT</button>
         </div>
 
@@ -831,6 +920,7 @@
         <!-- Topbar -->
         <div id="topbar">
             <div class="topbar-left">
+                <button id="topbar-sidebar-open" onclick="openSidebar()" title="Open sidebar">☰</button>
                 <span id="session-title" style="font-size:13px; color:var(--text); font-weight:500">New Session</span>
             </div>
             <div class="topbar-center">
@@ -1114,6 +1204,37 @@ function toggleSecurityPanel() {
     secPanelOpen = !secPanelOpen;
     panel.classList.toggle('open', secPanelOpen);
     btn.classList.toggle('active', secPanelOpen);
+}
+
+// ── Sidebar collapse/expand ────────────────────────────────
+const isMobile = () => window.innerWidth <= 640;
+
+function toggleSidebar() {
+    if (isMobile()) {
+        closeSidebarMobile();
+    } else {
+        const sidebar = document.getElementById('left-sidebar');
+        const openBtn = document.getElementById('topbar-sidebar-open');
+        const collapsed = sidebar.classList.toggle('collapsed');
+        openBtn.classList.toggle('visible', collapsed);
+    }
+}
+
+function openSidebar() {
+    const sidebar = document.getElementById('left-sidebar');
+    const openBtn = document.getElementById('topbar-sidebar-open');
+    if (isMobile()) {
+        sidebar.classList.add('mobile-open');
+        document.getElementById('sidebar-backdrop').classList.add('visible');
+    } else {
+        sidebar.classList.remove('collapsed');
+        openBtn.classList.remove('visible');
+    }
+}
+
+function closeSidebarMobile() {
+    document.getElementById('left-sidebar').classList.remove('mobile-open');
+    document.getElementById('sidebar-backdrop').classList.remove('visible');
 }
 
 // ── Timeline ───────────────────────────────────────────────
