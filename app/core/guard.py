@@ -6,7 +6,7 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-HF_MODEL_URL = "https://api-inference.huggingface.co/models/protectai/deberta-v3-base-prompt-injection-v2"
+HF_MODEL_URL = "https://router.huggingface.co/models/protectai/deberta-v3-base-prompt-injection-v2"
 
 # ── REGEX FALLBACK (always available) ─────────────────
 INJECTION_PATTERNS = [
