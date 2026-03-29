@@ -1,53 +1,42 @@
-# === API FRAMEWORK ===
+# === API FRAMEWORK & SERVER ===
 fastapi==0.115.0
 uvicorn[standard]==0.29.0
-
 python-multipart==0.0.9
-PyJWT
-passlib[bcrypt]==1.7.4
-pydantic 
-# === LLM CLIENT ===
-openai==1.30.0
 
-
-# === PII DETECTION ===
-spacy==3.8.4
-https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
-
-# === DATA VALIDATION ===
-pydantic==2.10.0
-pydantic-settings==2.6.0
-
-# === UTILITIES ===
-python-dotenv==1.0.1
-structlog==24.1.0
-httpx==0.27.0
-
-# === TESTING ===
-pytest==8.2.0
-pytest-asyncio==0.23.7
-groq
-prometheus-fastapi-instrumentator==6.1.0
-
-# === AUTHENTICATION ===
+# === AUTHENTICATION & SECURITY ===
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
-python-multipart==0.0.9
+cryptography==42.0.5
+PyJWT==2.8.0
+
+# === DATA VALIDATION ===
+# Using 2.10.0 to match your latest preference
+pydantic==2.10.0
+pydantic-settings==2.6.0
+email-validator==2.1.1
+
+# === LLM CLIENTS & AI ===
+groq==1.1.2
+openai==1.30.0
+langchain==0.2.16
+langchain-groq==0.1.9
+
+# === PII DETECTION & NLP ===
+spacy==3.8.4
+https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
 
 # === DATABASE ===
 sqlalchemy==2.0.36
 alembic==1.13.1
 
-# === RATE LIMITING ===
-slowapi==0.1.9
-
-# === LANGCHAIN MEMORY ===
-langchain==0.2.16
-langchain-groq==0.1.9
-
-# === MISSING GLUE LIBRARIES ===
-cryptography==42.0.5
-email-validator==2.1.1
-pytest-asyncio==0.23.7
+# === UTILITIES & MONITORING ===
+python-dotenv==1.0.1
+structlog==24.1.0
 httpx==0.27.0
+slowapi==0.1.9
+prometheus-fastapi-instrumentator==6.1.0
+
+# === TESTING ===
+pytest==8.2.0
+pytest-asyncio==0.23.7
