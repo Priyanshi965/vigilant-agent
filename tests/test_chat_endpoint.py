@@ -1,22 +1,36 @@
 import pytest
+import uuid
 from httpx import AsyncClient, ASGITransport
 from app.main import app
 
-
 async def get_token(client: AsyncClient, role: str = "operator") -> str:
-    """Helper — register + login, return JWT token."""
-    username = f"testuser_{role}"
-    await client.post("/auth/register", json={
+    """Helper — register + login with a UNIQUE user to prevent DB collisions."""
+    # Create a unique username for every single test run
+    unique_suffix = str(uuid.uuid4())[:8]
+    username = f"user_{role}_{unique_suffix}"
+    password = "testpass123"
+
+    # 1. Register the unique user
+    register_res = await client.post("/auth/register", json={
         "username": username,
-        "password": "testpass123",
+        "password": password,
         "role": role
     })
-    response = await client.post("/auth/login", data={
+    
+    # 2. Login to get the token
+    login_res = await client.post("/auth/login", data={
         "username": username,
-        "password": "testpass123"
+        "password": password
     })
-    return response.json()["access_token"]
 
+    # Error handling to help us debug in GitHub Actions if it fails
+    if login_res.status_code != 200:
+        print(f"DEBUG: Register Status: {register_res.status_code}")
+        print(f"DEBUG: Login Status: {login_res.status_code}")
+        print(f"DEBUG: Login Response: {login_res.text}")
+        raise Exception(f"Failed to get token for {username}")
+
+    return login_res.json()["access_token"]
 
 @pytest.mark.asyncio
 async def test_ping():
@@ -24,7 +38,6 @@ async def test_ping():
         response = await client.get("/ping")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
-
 
 @pytest.mark.asyncio
 async def test_chat_injection_blocked():
@@ -36,7 +49,6 @@ async def test_chat_injection_blocked():
         )
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "INJECTION_DETECTED"
-
 
 @pytest.mark.asyncio
 async def test_agent_safe_tool_allowed():
@@ -55,7 +67,6 @@ async def test_agent_safe_tool_allowed():
     assert data["success"] is True
     assert data["blocked"] is False
 
-
 @pytest.mark.asyncio
 async def test_agent_cbac_blocks_readonly():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -72,7 +83,6 @@ async def test_agent_cbac_blocks_readonly():
     data = response.json()
     assert data["blocked"] is True
     assert "not permitted" in data["reason"]
-
 
 @pytest.mark.asyncio
 async def test_agent_unknown_tool_blocked():
