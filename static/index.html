@@ -1799,17 +1799,11 @@ async function sendMessage() {
     if (imageSnapshot) {
         const typing = appendTypingIndicator();
         try {
-            let res = await fetch(API_BASE + '/chat', {
+            const res = await fetch(API_BASE + '/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
                 body: JSON.stringify(payload)
             });
-            if (res.status === 401 || res.status === 422) {
-                res = await fetch(API_BASE + '/chat?token=' + authToken, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-            }
             const data = await res.json().catch(() => ({}));
             typing.remove();
             processResponse(res, data, text);
@@ -1829,11 +1823,19 @@ async function sendMessage() {
     let   meta      = null;
 
     try {
-        const res = await fetch(API_BASE + '/chat/stream?token=' + authToken, {
+        const res = await fetch(API_BASE + '/chat/stream', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
             body: JSON.stringify(payload)
         });
+
+        if (res.status === 403) {
+            streamDiv.remove();
+            const data = await res.json().catch(() => ({}));
+            processResponse(res, data, text);
+            document.getElementById('send-btn').disabled = false;
+            return;
+        }
 
         if (!res.ok || !res.body) throw new Error('stream_unavailable');
 
@@ -1902,17 +1904,11 @@ async function sendMessage() {
         streamDiv.remove();
         const typing = appendTypingIndicator();
         try {
-            let res = await fetch(API_BASE + '/chat', {
+            const res = await fetch(API_BASE + '/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
                 body: JSON.stringify(payload)
             });
-            if (res.status === 401 || res.status === 422) {
-                res = await fetch(API_BASE + '/chat?token=' + authToken, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-            }
             const data = await res.json().catch(() => ({}));
             typing.remove();
             processResponse(res, data, text);
