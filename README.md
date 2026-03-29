@@ -63,13 +63,7 @@ Get a free Groq API key at [console.groq.com](https://console.groq.com).
 
 ```bash
 python -m uvicorn main:app --reload --port 8000
-```
 
-Open [http://localhost:8000](http://localhost:8000) — the chat UI loads automatically.
-
-Default login: `admin` / `admin123`
-
----
 
 ## Run with Docker
 
