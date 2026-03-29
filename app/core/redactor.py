@@ -6,8 +6,8 @@ logger = logging.getLogger(__name__)
 try:
     import spacy
     nlp = spacy.load("en_core_web_sm")
-except (OSError, ImportError):
-    logger.warning("spaCy model not found — NER redaction disabled, regex-only mode active")
+except Exception:
+    logger.warning("spaCy unavailable — NER redaction disabled, regex-only mode active")
     nlp = None
 
 # ── REGEX PATTERNS ─────────────────────────────────────
