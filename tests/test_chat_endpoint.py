@@ -18,7 +18,7 @@ async def get_token(client: AsyncClient, role: str = "operator") -> str:
     })
     
     # 2. Login to get the token
-    login_res = await client.post("/auth/login", data={
+    login_res = await client.post("/auth/login", json={
         "username": username,
         "password": password
     })
