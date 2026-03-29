@@ -1829,6 +1829,16 @@ async function sendMessage() {
             body: JSON.stringify(payload)
         });
 
+        if (res.status === 401) {
+            streamDiv.remove();
+            authToken = null;
+            localStorage.removeItem('token');
+            appendAgentMessage('⚠️ Session expired — please log in again.', true, false, false, null);
+            document.getElementById('send-btn').disabled = false;
+            setTimeout(() => { window.location.href = '/auth.html'; }, 2000);
+            return;
+        }
+
         if (res.status === 403) {
             streamDiv.remove();
             const data = await res.json().catch(() => ({}));
@@ -1923,6 +1933,13 @@ async function sendMessage() {
 }
 
 function processResponse(res, data, originalText) {
+    if (res.status === 401) {
+        authToken = null;
+        localStorage.removeItem('token');
+        appendAgentMessage('⚠️ Session expired — please log in again.', true, false, false, null);
+        setTimeout(() => { window.location.href = '/auth.html'; }, 2000);
+        return;
+    }
     if (res.ok) {
         const score      = data.injection_score ?? 0;
         const blocked    = data.blocked ?? false;
