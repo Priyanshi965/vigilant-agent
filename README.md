@@ -12,7 +12,14 @@ An intelligent, production-ready AI security gateway. Vigilant Agent is a FastAP
 
 <img width="825" height="676" alt="image" src="https://github.com/user-attachments/assets/350865af-a58f-47c2-a363-478ee40c3606" />
 
+
 *For best impact: open the threat analysis panel (🛡 button), send an injection attempt, and screenshot the BLOCKED response with the security score visible.*
+
+
+<img width="744" height="223" alt="Screenshot 2026-03-29 224812" src="https://github.com/user-attachments/assets/370e62f3-e514-444b-a63c-04c02cf44218" />
+
+Prompt injection attempt detected and blocked in real time — ML confidence score 0.9608, session flagged HIGH risk
+---
 
 ## Features
 
