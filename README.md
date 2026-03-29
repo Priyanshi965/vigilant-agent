@@ -1,8 +1,17 @@
 # Vigilant Agent
 
-An intelligent, production-ready AI security gateway. Vigilant Agent is a FastAPI-based proxy for LLMs (Groq) with built-in prompt injection detection, PII redaction, JWT authentication, image understanding, and a full cybersecurity-themed chat UI.
+![Python](https://img.shields.io/badge/python-3.11-blue)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green)
+![License](https://img.shields.io/badge/license-MIT-blue)
+[![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://vigilant-agent.onrender.com/)
 
+An intelligent, production-ready AI security gateway. Vigilant Agent is a FastAPI-based proxy for LLMs (Groq) with built-in prompt injection detection, PII redaction, JWT authentication, image understanding, and a full cybersecurity-themed chat UI.
 ---
+## 📺 Preview
+
+<img width="825" height="676" alt="image" src="https://github.com/user-attachments/assets/350865af-a58f-47c2-a363-478ee40c3606" />
+
+*Cybersecurity-themed UI featuring real-time security analysis and multimodal support.*
 
 ## Features
 
@@ -15,6 +24,15 @@ An intelligent, production-ready AI security gateway. Vigilant Agent is a FastAP
 - **Rate Limiting & Alert Middleware** — pluggable middleware for request rate limits and security alerts
 - **Docker Compose** — app + Prometheus + Grafana in one command
 - **Full Chat UI** — ChatGPT-style interface with avatars, collapsible security analysis per message, image preview, session sidebar
+
+---
+
+
+## 🏗️ Architecture & Logic Flow
+
+The gateway ensures every request is "sanitized" before touching the AI:
+
+`User Request` → `Rate Limiter` → `Guard (Injection)` → `Redactor (PII)` → `Groq LLM` → `Response Audit` → `User`
 
 ---
 
