@@ -17,7 +17,7 @@ pydantic-settings==2.6.0
 email-validator==2.1.1
 
 # === LLM CLIENTS & AI ===
-groq==1.1.2
+groq==0.37.1
 
 # === PII DETECTION & NLP ===
 spacy>=3.8.7
