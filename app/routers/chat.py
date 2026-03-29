@@ -246,7 +246,7 @@ async def chat_stream(
         try:
             async for chunk in stream_complete(clean_message, history=history):
                 full_response.append(chunk)
-                yield f"data: {chunk}\n\n"
+                yield f"data: {json.dumps({'t': chunk})}\n\n"
 
         except Exception as e:
             logger.error(f"Streaming error for user={username}: {e}")
@@ -255,24 +255,27 @@ async def chat_stream(
 
         complete_text = "".join(full_response)
         safe_reply = redact(complete_text)
-        
-        # Add warning if suspicious
+
         if is_suspicious(clean_message) and injection_score > 0.5:
             safe_reply += "\n\n⚠️ _Note: This request contained patterns commonly used for prompt injection. Your request was still processed, but parts may have been ignored for safety._"
-        
+
         safe_reply = _apply_output_filter(safe_reply, username, user_id, db)
-
         add_message(conv_id, "assistant", safe_reply)
-
-        if safe_reply == "I'm sorry, I can't help with that.":
-            yield f"data: [FILTERED]\n\n"
 
         _save_conversation(
             db, user_id, conv_id, request.message,
             safe_reply, injection_score, input_pii_count
         )
 
-        yield f"data: [CONV_ID:{conv_id}]\n\n"
+        flagged = is_suspicious(clean_message) and injection_score > 0.5
+        meta = {
+            "injection_score": round(injection_score, 4),
+            "pii_items_redacted": input_pii_count,
+            "blocked": False,
+            "flagged": flagged,
+            "conversation_id": conv_id,
+        }
+        yield f"data: [META:{json.dumps(meta)}]\n\n"
         yield f"data: [DONE]\n\n"
 
     return StreamingResponse(
