@@ -7,18 +7,19 @@
 ![Tests](https://github.com/Priyanshi965/vigilant-agent/actions/workflows/test.yml/badge.svg)
 
 An intelligent, production-ready AI security gateway. Vigilant Agent is a FastAPI-based proxy for LLMs (Groq) with built-in prompt injection detection, PII redaction, JWT authentication, image understanding, and a full cybersecurity-themed chat UI.
+
 ---
+
 ## 📺 Preview
 
-<img width="825" height="676" alt="image" src="https://github.com/user-attachments/assets/350865af-a58f-47c2-a363-478ee40c3606" />
+<img width="825" height="676" alt="Vigilant Agent UI" src="https://github.com/user-attachments/assets/350865af-a58f-47c2-a363-478ee40c3606" />
 
+*Cybersecurity-themed UI featuring real-time security analysis and multimodal support.*
 
-*For best impact: open the threat analysis panel (🛡 button), send an injection attempt, and screenshot the BLOCKED response with the security score visible.*
+<img width="744" height="223" alt="Prompt injection blocked" src="https://github.com/user-attachments/assets/370e62f3-e514-444b-a63c-04c02cf44218" />
 
+*Prompt injection attempt detected and blocked in real time — ML confidence score 0.9608, session flagged HIGH risk.*
 
-<img width="744" height="223" alt="Screenshot 2026-03-29 224812" src="https://github.com/user-attachments/assets/370e62f3-e514-444b-a63c-04c02cf44218" />
-
-Prompt injection attempt detected and blocked in real time — ML confidence score 0.9608, session flagged HIGH risk
 ---
 
 ## Features
@@ -35,10 +36,9 @@ Prompt injection attempt detected and blocked in real time — ML confidence sco
 
 ---
 
-
 ## 🏗️ Architecture & Logic Flow
 
-The gateway ensures every request is "sanitized" before touching the AI:
+The gateway ensures every request is sanitized before touching the AI:
 
 `User Request` → `Rate Limiter` → `Guard (Injection)` → `Redactor (PII)` → `Groq LLM` → `Response Audit` → `User`
 
@@ -61,7 +61,6 @@ The gateway ensures every request is "sanitized" before touching the AI:
 ## Quick Start
 
 ### 1. Clone and install
-
 ```bash
 git clone https://github.com/Priyanshi965/vigilant-agent.git
 cd vigilant-agent
@@ -76,7 +75,6 @@ pip install -r requirements.txt
 ### 2. Configure environment
 
 Copy `.env.example` to `.env` and fill in your keys:
-
 ```env
 GROQ_API_KEY=your_groq_key_here
 SECRET_KEY=any-long-random-string
@@ -86,13 +84,13 @@ TOKEN_EXPIRE_HOURS=24
 Get a free Groq API key at [console.groq.com](https://console.groq.com).
 
 ### 3. Run
-
 ```bash
 python -m uvicorn main:app --reload --port 8000
+```
 
+---
 
 ## Run with Docker
-
 ```bash
 docker-compose up --build
 ```
@@ -104,7 +102,6 @@ docker-compose up --build
 ---
 
 ## Project Structure
-
 ```
 vigilant-agent/
 ├── main.py                  # Standalone server (Groq + SQLite, no dependencies)
@@ -192,7 +189,6 @@ python benchmark.py
 ---
 
 ## Running Tests
-
 ```bash
 pytest tests/ -v
 ```
