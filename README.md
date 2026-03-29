@@ -4,6 +4,7 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 [![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://vigilant-agent.onrender.com/)
+![Tests](https://github.com/Priyanshi965/vigilant-agent/actions/workflows/test.yml/badge.svg)
 
 An intelligent, production-ready AI security gateway. Vigilant Agent is a FastAPI-based proxy for LLMs (Groq) with built-in prompt injection detection, PII redaction, JWT authentication, image understanding, and a full cybersecurity-themed chat UI.
 ---
